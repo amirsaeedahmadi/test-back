@@ -145,7 +145,7 @@ public class AuthenticationService {
   public AuthenticationInfo register(RegistrationRequestDto request) {
     validateRegistrationInput(request);
 
-    AuthenticationInfo existingUser = authRepository.findByUsername(request.getUsername());
+    AuthenticationInfo existingUser = authRepository.findByUsername(request.getEmail());
     if (Objects.nonNull(existingUser)) {
       log.info("User already exists: {}", existingUser);
       throw new CustomException(ErrorCode.USER_ALREADY_EXISTS, "User already exists");
@@ -155,7 +155,7 @@ public class AuthenticationService {
 
     AuthenticationInfo authenticationInfo = authRepository.save(
             AuthenticationInfo.builder()
-                    .username(request.getUsername())
+                    .username(request.getEmail())
                     .password(encodedPassword)
                     .role(request.getRole())
                     .build());
@@ -163,7 +163,7 @@ public class AuthenticationService {
     // Create initial user profile
     UserDto userDto = UserDto.builder()
             .id(authenticationInfo.getUserId())
-            .username(request.getUsername())
+            .username(request.getEmail())
             .firstName(request.getFirstName())
             .lastName(request.getLastName())
             .phoneNumber(request.getPhoneNumber())
@@ -171,10 +171,14 @@ public class AuthenticationService {
 
     // Create user profile based on role
     switch (request.getRole()) {
-      case ADMIN -> userApi.createAdmin(AdminDto.builder().id(authenticationInfo.getUserId()).build());
+      case ADMIN -> userApi.createAdmin(AdminDto.builder()
+              .id(authenticationInfo.getUserId())
+              .firstName(request.getFirstName())
+              .lastName(request.getLastName())
+              .phoneNumber(request.getPhoneNumber())
+              .build());
       case USER -> userApi.createUser(userDto);
     }
-
     // Send verification email
     verificationService.createVerificationToken(authenticationInfo);
 
@@ -182,7 +186,7 @@ public class AuthenticationService {
   }
 
   private void validateRegistrationInput(RegistrationRequestDto request) {
-    if (request.getUsername() == null || request.getUsername().isEmpty()) {
+    if (request.getEmail() == null || request.getEmail().isEmpty()) {
       throw new CustomException(ErrorCode.INVALID_CREDENTIALS, "Username cannot be empty");
     }
     if (request.getPassword() == null || request.getPassword().isEmpty()) {
@@ -196,9 +200,6 @@ public class AuthenticationService {
     }
     if (request.getPhoneNumber() == null || request.getPhoneNumber().isEmpty()) {
       throw new CustomException(ErrorCode.INVALID_CREDENTIALS, "Phone number cannot be empty");
-    }
-    if (request.getEmail() == null || request.getEmail().isEmpty()) {
-      throw new CustomException(ErrorCode.INVALID_CREDENTIALS, "Email cannot be empty");
     }
     if (request.getRole() == null) {
       throw new CustomException(ErrorCode.INVALID_CREDENTIALS, "Role cannot be null");
